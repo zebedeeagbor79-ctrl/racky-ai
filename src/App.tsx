@@ -1,423 +1,235 @@
 
 import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
-import {
-  Sparkles,
-  Image as ImageIcon,
-  PenTool,
-  FolderOpen,
-  LogOut,
-  Menu,
-  X,
-  Crown,
-  Send,
-  Clock,
-  WandSparkles,
-} from 'lucide-react';
-import type { User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 
-type Tool = 'design' | 'photo' | 'content';
-
-type Project = {
-  id: string;
-  title: string;
-  tool: string;
-  prompt: string | null;
-  created_at: string;
-};
+type Tool = 'Design Studio' | 'Photo Lab' | 'Content Desk';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
-  const [tool, setTool] = useState<Tool>('design');
+  const [tool, setTool] = useState<Tool>('Design Studio');
   const [prompt, setPrompt] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [showProjects, setShowProjects] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [mobileMenu, setMobileMenu] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
-      setLoading(false);
+      setSession(data.session);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
+    const { data } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => setSession(newSession)
     );
 
-    return () => listener.subscription.unsubscribe();
+    return () => data.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (user) loadProjects();
-  }, [user]);
+  async function signIn() {
+    if (!email.trim()) {
+      setMessage('Enter your email address.');
+      return;
+    }
 
-  async function loadProjects() {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id,title,tool,prompt,created_at')
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (!error && data) setProjects(data as Project[]);
-  }
-
-  async function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSending(true);
+    setLoading(true);
     setMessage('');
 
     const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
+      email: email.trim()
     });
 
     setMessage(
-      error
-        ? error.message
-        : 'Check your email for your RACKY AI sign-in link.'
+      error ? error.message : 'Check your email for your sign-in link.'
     );
-    setSending(false);
+    setLoading(false);
   }
 
   async function signOut() {
     await supabase.auth.signOut();
-    setProjects([]);
+    setSession(null);
   }
 
-  function chooseTool(nextTool: Tool) {
-    setTool(nextTool);
-    setShowProjects(false);
-    setMobileMenu(false);
-    setPrompt('');
-    setPhoto(null);
-  }
-
-  function requestGeneration() {
-    setMessage(
-      'AI generation is being connected to the secure RACKY AI backend. Your request has not been submitted yet.'
-    );
-  }
-
-  if (loading) {
+  if (!session) {
     return (
-      <div className="loading-screen">
-        <Sparkles size={34} />
-        <h2>RACKY AI</h2>
-        <p>Preparing your creative studio...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <main className="auth-screen">
-        <div className="auth-card">
-          <div className="brand-mark">
-            <Crown size={27} />
-            <span>R</span>
-          </div>
-          <p className="eyebrow">YOUR CREATIVE WORLD</p>
-          <h1>RACKY <span>AI</span></h1>
-          <p className="auth-description">
-            One studio. Unlimited ideas. Create something iconic.
-          </p>
-
-          <form onSubmit={signIn}>
-            <label htmlFor="email">Email address</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              required
-            />
-            <button className="primary-button" disabled={sending}>
-              {sending ? 'Sending link...' : 'Continue with Email'}
-            </button>
-          </form>
-
-          {message && <p className="status-message">{message}</p>}
-
-          <p className="auth-footer">
-            By continuing, you agree to use RACKY AI responsibly.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  const toolDetails = {
-    design: {
-      title: 'Design Studio',
-      description: 'Turn your ideas into powerful visual designs.',
-      placeholder: 'Describe the flyer, logo or graphic you want...',
-      button: 'Create Design',
-    },
-    photo: {
-      title: 'Photo Lab',
-      description: 'Prepare your photos for AI-powered editing.',
-      placeholder: 'Describe how you want your photo changed...',
-      button: 'Edit Photo',
-    },
-    content: {
-      title: 'Content Desk',
-      description: 'Create words that connect, sell and inspire.',
-      placeholder: 'Tell RACKY AI what you want to write...',
-      button: 'Generate Content',
-    },
-  };
-
-  const current = toolDetails[tool];
-
-  return (
-    <div className="app-shell">
-      <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}>
-        <div className="sidebar-brand">
-          <div className="brand-mark small">
-            <Crown size={20} />
-            <span>R</span>
-          </div>
-          <div>
-            <strong>RACKY AI</strong>
-            <small>CREATIVE STUDIO</small>
-          </div>
-          <button
-            className="mobile-close"
-            onClick={() => setMobileMenu(false)}
-            aria-label="Close menu"
-          >
-            <X />
+      <main style={styles.page}>
+        <section style={styles.auth}>
+          <div style={styles.logo}>R</div>
+          <h1>RACKY <span style={{color:'#a78bfa'}}>AI</span></h1>
+          <p>Your All-in-One AI Creative Studio</p>
+          <input
+            style={styles.input}
+            type="email"
+            placeholder="Enter your email address"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+          />
+          <button style={styles.button} onClick={signIn} disabled={loading}>
+            {loading ? 'Please wait...' : 'Continue with Email'}
           </button>
-        </div>
-
-        <p className="nav-label">WORKSPACE</p>
-
-        <button
-          className={`nav-item ${tool === 'design' && !showProjects ? 'active' : ''}`}
-          onClick={() => chooseTool('design')}
-        >
-          <PenTool size={19} /> Design Studio
-        </button>
-
-        <button
-          className={`nav-item ${tool === 'photo' && !showProjects ? 'active' : ''}`}
-          onClick={() => chooseTool('photo')}
-        >
-          <ImageIcon size={19} /> Photo Lab
-        </button>
-
-        <button
-          className={`nav-item ${tool === 'content' && !showProjects ? 'active' : ''}`}
-          onClick={() => chooseTool('content')}
-        >
-          <WandSparkles size={19} /> Content Desk
-        </button>
-
-        <p className="nav-label">LIBRARY</p>
-
-        <button
-          className={`nav-item ${showProjects ? 'active' : ''}`}
-          onClick={() => {
-            setShowProjects(true);
-            setMobileMenu(false);
-          }}
-        >
-          <FolderOpen size={19} /> My Projects
-        </button>
-
-        <div className="sidebar-bottom">
-          <div className="upgrade-card">
-            <Crown size={21} />
-            <strong>RACKY AI PRO</strong>
-            <p>48-hour free trial, then ₦2,000/month.</p>
-            <small>Subscription setup coming soon</small>
-          </div>
-
-          <div className="user-info">
-            <div className="avatar">
-              {user.email?.charAt(0).toUpperCase()}
-            </div>
-            <div className="user-email">{user.email}</div>
-            <button onClick={signOut} title="Sign out">
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      <main className="main-area">
-        <header className="topbar">
-          <button
-            className="mobile-menu"
-            onClick={() => setMobileMenu(true)}
-            aria-label="Open menu"
-          >
-            <Menu />
-          </button>
-          <div>
-            <span className="online-dot" />
-            <span>Creative workspace</span>
-          </div>
-          <div className="topbar-right">
-            <Sparkles size={18} />
-            <span>Welcome to RACKY AI</span>
-          </div>
-        </header>
-
-        <section className="workspace">
-          {showProjects ? (
-            <div className="projects-page">
-              <p className="eyebrow">YOUR LIBRARY</p>
-              <h1>My Projects</h1>
-              <p className="page-description">
-                Your saved creative work in one place.
-              </p>
-
-              {projects.length === 0 ? (
-                <div className="empty-state">
-                  <FolderOpen size={38} />
-                  <h3>No projects yet</h3>
-                  <p>Your saved creations will appear here.</p>
-                  <button
-                    className="primary-button"
-                    onClick={() => chooseTool('design')}
-                  >
-                    Start creating
-                  </button>
-                </div>
-              ) : (
-                <div className="project-list">
-                  {projects.map((project) => (
-                    <article className="project-card" key={project.id}>
-                      <div className="project-icon">
-                        <ImageIcon />
-                      </div>
-                      <div>
-                        <strong>{project.title}</strong>
-                        <p>{project.tool} · {project.prompt || 'No prompt'}</p>
-                        <small>
-                          {new Date(project.created_at).toLocaleDateString()}
-                        </small>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="welcome-section">
-                <p className="eyebrow">WELCOME TO YOUR CREATIVE WORLD</p>
-                <h1>Create without limits.</h1>
-                <p>
-                  Bring your ideas to life with your all-in-one AI creative studio.
-                </p>
-              </div>
-
-              <div className="tool-tabs">
-                <button
-                  className={tool === 'design' ? 'selected' : ''}
-                  onClick={() => chooseTool('design')}
-                >
-                  <PenTool size={17} /> Design
-                </button>
-                <button
-                  className={tool === 'photo' ? 'selected' : ''}
-                  onClick={() => chooseTool('photo')}
-                >
-                  <ImageIcon size={17} /> Photo
-                </button>
-                <button
-                  className={tool === 'content' ? 'selected' : ''}
-                  onClick={() => chooseTool('content')}
-                >
-                  <WandSparkles size={17} /> Content
-                </button>
-              </div>
-
-              <div className="creation-panel">
-                <div className="panel-heading">
-                  <div className="panel-icon">
-                    <Sparkles size={22} />
-                  </div>
-                  <div>
-                    <h2>{current.title}</h2>
-                    <p>{current.description}</p>
-                  </div>
-                </div>
-
-                {tool === 'photo' && (
-                  <label className="upload-zone">
-                    <ImageIcon size={32} />
-                    <strong>
-                      {photo ? photo.name : 'Upload a photo'}
-                    </strong>
-                    <span>Choose an image from your device</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setPhoto(e.target.files?.[0] || null)}
-                    />
-                  </label>
-                )}
-
-                <label className="prompt-label" htmlFor="prompt">
-                  YOUR INSTRUCTIONS
-                </label>
-                <textarea
-                  id="prompt"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={current.placeholder}
-                  rows={5}
-                />
-
-                <button
-                  className="primary-button generate-button"
-                  onClick={requestGeneration}
-                  disabled={!prompt.trim() || (tool === 'photo' && !photo)}
-                >
-                  <Send size={17} />
-                  {current.button}
-                </button>
-
-                {message && (
-                  <p className="status-message">{message}</p>
-                )}
-              </div>
-
-              <div className="feature-row">
-                <div>
-                  <Clock size={19} />
-                  <strong>Smart workspace</strong>
-                  <span>Your creative tools in one place</span>
-                </div>
-                <div>
-                  <FolderOpen size={19} />
-                  <strong>Project history</strong>
-                  <span>Access your saved work</span>
-                </div>
-                <div>
-                  <Sparkles size={19} />
-                  <strong>AI-powered</strong>
-                  <span>Built for your next big idea</span>
-                </div>
-              </div>
-            </>
-          )}
+          <p>{message}</p>
+          <small>Sign in securely with Supabase</small>
         </section>
       </main>
-    </div>
+    );
+  }
+
+  return (
+    <main style={styles.page}>
+      <header style={styles.header}>
+        <h2>RACKY <span style={{color:'#a78bfa'}}>AI</span></h2>
+        <button style={styles.signout} onClick={signOut}>Sign out</button>
+      </header>
+
+      <section style={styles.content}>
+        <p style={{color:'#a78bfa'}}>WELCOME TO YOUR CREATIVE SPACE</p>
+        <h1>Make your ideas iconic.</h1>
+        <p>Create. Design. Write. Bring your imagination to life.</p>
+
+        <div style={styles.tabs}>
+          {(['Design Studio', 'Photo Lab', 'Content Desk'] as Tool[]).map(item => (
+            <button
+              key={item}
+              onClick={() => setTool(item)}
+              style={{
+                ...styles.tab,
+                background: tool === item ? '#7138db' : '#211a31'
+              }}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+
+        <section style={styles.panel}>
+          <h2>{tool}</h2>
+          <p>
+            {tool === 'Design Studio'
+              ? 'Describe the flyer or graphic you want to create.'
+              : tool === 'Photo Lab'
+              ? 'Describe how you want your photo edited.'
+              : 'Create captions, bios, adverts and more.'}
+          </p>
+
+          <textarea
+            style={styles.textarea}
+            placeholder="Describe what you want to create..."
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+          />
+
+          <button
+            style={styles.button}
+            onClick={() => setMessage('AI generation is not connected yet.')}
+          >
+            Generate
+          </button>
+          {message && <p>{message}</p>}
+        </section>
+      </section>
+      <footer style={styles.footer}>RACKY AI © 2026</footer>
+    </main>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: '100vh',
+    background: '#090611',
+    color: '#fff',
+    fontFamily: 'Arial, sans-serif',
+    padding: '24px',
+    boxSizing: 'border-box'
+  },
+  auth: {
+    maxWidth: '420px',
+    margin: '12vh auto',
+    textAlign: 'center',
+    background: '#171020',
+    padding: '32px',
+    borderRadius: '20px'
+  },
+  logo: {
+    margin: 'auto',
+    width: '60px',
+    height: '60px',
+    borderRadius: '18px',
+    background: '#7138db',
+    display: 'grid',
+    placeItems: 'center',
+    fontSize: '36px',
+    fontWeight: 'bold'
+  },
+  input: {
+    width: '100%',
+    padding: '15px',
+    margin: '20px 0 12px',
+    boxSizing: 'border-box',
+    borderRadius: '10px',
+    border: '1px solid #49365e',
+    background: '#090611',
+    color: 'white'
+  },
+  button: {
+    width: '100%',
+    padding: '15px',
+    border: 0,
+    borderRadius: '10px',
+    background: '#7138db',
+    color: 'white',
+    fontWeight: 'bold',
+    cursor: 'pointer'
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #30233f',
+    paddingBottom: '15px'
+  },
+  signout: {
+    background: '#211a31',
+    color: 'white',
+    padding: '10px 16px',
+    border: 0,
+    borderRadius: '8px'
+  },
+  content: {
+    maxWidth: '850px',
+    margin: '60px auto'
+  },
+  tabs: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '10px',
+    margin: '30px 0'
+  },
+  tab: {
+    color: 'white',
+    border: 0,
+    padding: '13px 18px',
+    borderRadius: '9px',
+    cursor: 'pointer'
+  },
+  panel: {
+    background: '#171020',
+    padding: '25px',
+    borderRadius: '18px',
+    border: '1px solid #30233f'
+  },
+  textarea: {
+    width: '100%',
+    minHeight: '150px',
+    boxSizing: 'border-box',
+    padding: '15px',
+    margin: '15px 0',
+    borderRadius: '10px',
+    background: '#090611',
+    color: 'white',
+    border: '1px solid #49365e',
+    resize: 'vertical'
+  },
+  footer: {
+    textAlign: 'center',
+    color: '#81758e',
+    padding: '30px'
+  }
+};
